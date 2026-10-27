@@ -1,3 +1,0 @@
-#!/bin/sh
-set -eu
-python "$(git rev-parse --show-toplevel)/scripts/check_git_identity.py" --history

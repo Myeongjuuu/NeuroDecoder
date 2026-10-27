@@ -73,15 +73,5 @@
     "path": "EEG Inner Speech Decoding/Wavelet_Transform.ipynb",
     "bytes": 58345,
     "sha256": "55038fc62dfacd97ea8853b2130cab9bcfee17a783c6fe00e0486bfde0feb773"
-  },
-  {
-    "path": "Imagined Speech Decoding using Functional Connectivity/EEG_preprocessing.ipynb",
-    "bytes": 6112143,
-    "sha256": "e9192d7c480ec10763a32e3e3a947dc5032a904249c945a4b11b27ef497c168e"
-  },
-  {
-    "path": "Imagined Speech Decoding using Functional Connectivity/PLV_analysis.ipynb",
-    "bytes": 4810096,
-    "sha256": "e561b59753b4f794349b4f2eb9b83bc79273909bbea92a761a0a38dc47c1883b"
   }
 ]

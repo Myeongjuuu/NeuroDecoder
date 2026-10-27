@@ -15,19 +15,19 @@
     "sha256": "ba03549bc5d8c661369f80aa71296bca5a69d6024b530b7910c8144d326644b8"
   },
   {
-    "path": "EEG Inner Speech Decoding/filter_bank (2).ipynb",
-    "bytes": 617,
-    "sha256": "4dc062315b53254e4ec076345da841218839011951f825228a3a72f4ab637215"
+    "path": "EEG Inner Speech Decoding/check_env.py",
+    "bytes": 773,
+    "sha256": "faa46d136593b55a1d709d7be9fa9cfb98dc67fb0ef96b58a2218238a1a466ae"
   },
   {
     "path": "EEG Inner Speech Decoding/filter_bank.ipynb",
-    "bytes": 617,
-    "sha256": "4dc062315b53254e4ec076345da841218839011951f825228a3a72f4ab637215"
+    "bytes": 6233,
+    "sha256": "52ba9ad9264b06431335597c2780d202bcb6561f62bafc9579d38fd4e28e0282"
   },
   {
-    "path": "EEG Inner Speech Decoding/hi.py",
-    "bytes": 0,
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "path": "EEG Inner Speech Decoding/filter_bank_csp.ipynb",
+    "bytes": 6215,
+    "sha256": "02d3027a6f2a4b827b20be293b0844712bc5c105e52189a38fdf903d09c895ce"
   },
   {
     "path": "EEG Inner Speech Decoding/preprocessing_0811.ipynb",
@@ -55,14 +55,14 @@
     "sha256": "3aac9157c4eb9d3c9d1b97c1b8e19e00df0a1af07c4358deeb845eb157189298"
   },
   {
-    "path": "EEG Inner Speech Decoding/psd (2).ipynb",
-    "bytes": 617,
-    "sha256": "be76d764e7ffb9eb3d8f4a981684f2d723038195920b0bb463d86797aad442a4"
+    "path": "EEG Inner Speech Decoding/psd.ipynb",
+    "bytes": 3858,
+    "sha256": "d020d8aa87f310903ff0d18be12a95c103341ecb2b8f16909e5c4eeb4ee7b507"
   },
   {
-    "path": "EEG Inner Speech Decoding/psd.ipynb",
-    "bytes": 617,
-    "sha256": "be76d764e7ffb9eb3d8f4a981684f2d723038195920b0bb463d86797aad442a4"
+    "path": "EEG Inner Speech Decoding/psd_comparison.ipynb",
+    "bytes": 4457,
+    "sha256": "4c36284ee065782c681ac4eea2ea6e2387f12cdc22bdc865e9ec1656ebbc8b5f"
   },
   {
     "path": "EEG Inner Speech Decoding/untitled.m",

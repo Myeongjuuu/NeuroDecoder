@@ -63,24 +63,9 @@ For a first run, explicitly select `subjects: [sub-01]` and `sessions: [ses-01]`
 
 Open the five notebooks after installation. They use `configs/default.yaml` unless environment variable `INNER_SPEECH_CONFIG` points to a local YAML. New notebooks contain no claimed results or saved executions.
 
-## Changes from the historical notebooks
-
-- Select inner-speech blocks with marker 22; direction labels alone do not identify condition.
-- Report/discard malformed trials and measure action/rest bounds without inventing triggers.
-- Recalculate event samples after resampling; match task/rest durations and paired QC.
-- Exclude stimulus/external channels; estimate connectivity across trials for all unique EEG pairs.
-- Add debiased squared wPLI and participant-level contrasts with one max-T family across configured methods, bands and edges.
-- Fit CSP inside each training fold, holding out entire runs; report balanced accuracy and macro-F1.
-- Describe the time-frequency implementation correctly as multitaper.
-
-The task/rest comparison remains observational. Inter-trial rest, shared stimuli, residual artifacts and sensor mixing limit interpretation. Significant sensor connections are not causal/anatomical links or proof of inner-speech specificity. The plan follows inspection of exploratory results and is not preregistered confirmation. See the analysis plan for assumptions and limitations, including shared session-level ICA in classification.
-
 ## Original archive
 
 The 17 original top-level `.ipynb`, `.py` and `.m` files retain their exact bytes, saved outputs, empty files and variants. Data, external weights and checkpoints are excluded. Old notebooks contain obsolete paths, possible evaluation leakage and incomplete experiments. External EEGNet inference is excluded from the new execution path. No code license has been selected; dataset licensing does not assign a license to this source code.
 
 Primary sources: [data descriptor](https://doi.org/10.1038/s41597-022-01147-2), [authors' repository](https://github.com/N-Nieto/Inner_Speech_Dataset), [wPLI methods](https://doi.org/10.1016/j.neuroimage.2011.01.055), and [MNE-Connectivity](https://mne.tools/mne-connectivity/stable/generated/mne_connectivity.spectral_connectivity_epochs.html).
 
-## Git author identity
-
-Run `python scripts/install_git_identity.py` after cloning. This installs repository-local public identity settings and commit/push guards. See [identity policy](docs/git_identity.md).

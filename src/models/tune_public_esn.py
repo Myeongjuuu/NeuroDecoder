@@ -116,11 +116,93 @@ def select_settings(features, labels, groups):
     return best
 
 
+def windows(signal):
+    return np.lib.stride_tricks.sliding_window_view(signal, SFREQ, axis=-1)[..., ::SFREQ // 2, :]
+
+
+def log_power(signal):
+    power = (windows(signal) ** 2).mean(axis=-1)
+    return np.log(np.maximum(power, np.finfo(float).tiny)).swapaxes(1, 2)
+
+
+def csp_bands(action):
+    signal = action[..., SFREQ // 2:]
+    signal = signal - signal.mean(axis=1, keepdims=True)
+    return [filter_band(signal, band, SFREQ) for band in ((4, 8), (8, 13), (13, 30), (30, 45))]
+
+
+def csp_input(train, labels, apply):
+    features = []
+    for data, evaluation in zip(train, apply):
+        covariance = data @ data.swapaxes(-1, -2)
+        trace = np.trace(covariance, axis1=-1, axis2=-2)
+        covariance /= np.maximum(trace[:, None, None], np.finfo(float).tiny)
+        shrink = 0.15 * np.eye(data.shape[1]) / data.shape[1]
+        spatial_filters = []
+        for label in range(len(DIRECTIONS)):
+            selected = labels == label
+            within = 0.85 * covariance[selected].mean(axis=0) + shrink
+            other = 0.85 * covariance[~selected].mean(axis=0) + shrink
+            _, vectors = eigh(within, within + other)
+            spatial_filters.extend(vectors[:, [0, 1, -2, -1]].T)
+        features.append(log_power(np.asarray(spatial_filters) @ evaluation))
+    return np.concatenate(features, axis=-1)
+
+
+def rank_directions(train, labels):
+    values = train.mean(axis=1)
+    overall = values.mean(axis=0)
+    between = np.zeros(values.shape[1])
+    within = np.zeros(values.shape[1])
+    for label in range(len(DIRECTIONS)):
+        group = values[labels == label]
+        center = group.mean(axis=0)
+        between += len(group) * (center - overall) ** 2
+        within += ((group - center) ** 2).sum(axis=0)
+    return np.argsort(-between / np.maximum(within, 1e-12), kind="stable")
+
+
+def score_test(train, labels, test, config):
+    projection = fit_projection(train)
+    fit_states = reservoir_states(project(train, projection), config)
+    test_states = reservoir_states(project(test, projection), config)
+    return predict(test_states, fit_readout(fit_states, labels))
+
+
+def compare_csp(action, labels, groups, test):
+    config = (64, 0.5, 0.9)
+    candidates = (8, 16)
+    training_bands = csp_bands(action)
+    cv_scores = {count: [] for count in candidates}
+    for session in np.unique(groups):
+        train = groups != session
+        features = csp_input([band[train] for band in training_bands], labels[train], training_bands)
+        order = rank_directions(features[train], labels[train])
+        for count in candidates:
+            selected = features[..., order[:count]]
+            guesses = score_test(selected[train], labels[train], selected[~train], config)
+            cv_scores[count].append(balanced_accuracy(labels[~train], guesses))
+    best_count = max(candidates, key=lambda count: np.mean(cv_scores[count]))
+    combined_bands = [np.concatenate((fit_band, test_band))
+                      for fit_band, test_band in zip(training_bands, csp_bands(test))]
+    combined = csp_input(training_bands, labels, combined_bands)
+    fit_features, test_features = combined[:len(labels)], combined[len(labels):]
+    selected = rank_directions(fit_features, labels)[:best_count]
+    return {
+        "filter-bank-csp": score_test(fit_features, labels, test_features, config),
+        f"filter-bank-csp-fisher-top-{best_count}": score_test(
+            fit_features[..., selected], labels, test_features[..., selected], config
+        ),
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train", nargs=2, type=Path, action="append", required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--test", nargs=2, type=Path, required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--trusted-legacy-events", action="store_true")
+    parser.add_argument("--compare", action="store_true",
+                        help="Save predictions from the existing ESN and both CSP variants.")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if len(args.train) < 2:
@@ -151,12 +233,25 @@ def main(argv=None):
     combined = np.concatenate(actions)
     labels = np.concatenate(targets)
     training = {name: sequences(combined, name) for name in ("band-power", "spatial-covariance")}
-    score, name, config = select_settings(training, labels, np.asarray(groups))
+    groups = np.asarray(groups)
+    score, name, config = select_settings(training, labels, groups)
     projection = fit_projection(training[name])
     states = reservoir_states(project(training[name], projection), config)
     readout = fit_readout(states, labels)
     test, true, _ = read(args.test)
     predicted = predict(reservoir_states(project(sequences(test, name), projection), config), readout)
+    if args.compare:
+        predictions = {"public-esn": predicted, **compare_csp(combined, labels, groups, test)}
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(("method", "inner_speech_trial", "true_direction", "prediction"))
+            for method, guesses in predictions.items():
+                writer.writerows((method, index, DIRECTIONS[actual], DIRECTIONS[guess])
+                                 for index, (actual, guess) in enumerate(zip(true, guesses), 1))
+        print(f"Comparison predictions saved to {args.output}")
+        return
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)

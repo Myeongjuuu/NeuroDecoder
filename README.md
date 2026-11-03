@@ -18,30 +18,35 @@ neurodecoder --help
 
 ## Public EEG dataset
 
-The public workflow uses **Thinking out loud**, the inner-speech EEG dataset by Nieto et al. The example below uses subject 01, session 01. [OpenNeuro ds003626](https://openneuro.org/datasets/ds003626/versions/2.1.2) · [Dataset paper](https://doi.org/10.1038/s41597-022-01147-2)
+The public workflow uses **Thinking out loud**, the inner-speech EEG dataset by Nieto et al. It contains 10 participants (`sub-01` through `sub-10`), with three sessions per participant. [Download from OpenNeuro](https://openneuro.org/datasets/ds003626/versions/2.1.2) · [Dataset paper](https://doi.org/10.1038/s41597-022-01147-2)
 
-Save these three derivative files in `data/` with their original names.
+In the dataset's `derivatives/sub-XX/ses-YY/` folders, download the matching `*_eeg-epo.fif` and `*_events.dat` files for each session. For Fisher analysis, also download the matching `*_baseline-epo.fif`. Save the files in the repository's `data/` directory with their original names.
 
-- [EEG epochs · sub-01_ses-01_eeg-epo.fif](https://s3.amazonaws.com/openneuro.org/ds003626/derivatives/sub-01/ses-01/sub-01_ses-01_eeg-epo.fif)
-- [Trial metadata · sub-01_ses-01_events.dat](https://s3.amazonaws.com/openneuro.org/ds003626/derivatives/sub-01/ses-01/sub-01_ses-01_events.dat)
-- [Resting baseline · sub-01_ses-01_baseline-epo.fif](https://s3.amazonaws.com/openneuro.org/ds003626/derivatives/sub-01/ses-01/sub-01_ses-01_baseline-epo.fif)
+### Fisher analysis
+
+Choose any participant and session with matching files. The analysis compares 2.5 s task windows with nonoverlapping windows of the same length from a single 15 s resting recording.
 
 ```powershell
-neurodecoder public-fisher --epochs data/sub-01_ses-01_eeg-epo.fif --events data/sub-01_ses-01_events.dat --baseline data/sub-01_ses-01_baseline-epo.fif --trusted-legacy-events --output results/fisher
+$id = Read-Host 'Participant and session ID (sub-XX_ses-YY)'
+neurodecoder public-fisher --epochs "data/${id}_eeg-epo.fif" --events "data/${id}_events.dat" --baseline "data/${id}_baseline-epo.fif" --trusted-legacy-events --output "results/fisher/${id}"
 ```
 
-The analysis compares 2.5 s task windows with nonoverlapping 2.5 s windows from the same session’s 15 s resting baseline. The baseline windows come from one continuous recording. Add `--esn` to run the four-direction replay. Use `--trusted-legacy-events` only with trusted DAT files.
+Add `--esn` to run a within-session replay. Use `--trusted-legacy-events` only with trusted DAT files.
 
-## ESN evaluation across sessions
+### ESN evaluation across all participants
 
-Use the EEG FIF and event DAT for each session from the same OpenNeuro dataset. The command selects the input representation and reservoir settings on the training sessions, then evaluates a fixed readout on the test session.
+The evaluation protocol trains a separate ESN for each participant. It selects the input representation and reservoir settings using sessions 01 and 02, then evaluates the fixed readout on session 03. Use `--compare` to run the standard ESN, filter-bank CSP + ESN, and direction-wise Fisher-selected CSP + ESN on the same split. Both CSP variants use the same reservoir. The number of selected components (8 or 16) is chosen within the training sessions. The loop writes one predictions CSV per participant.
 
 ```powershell
-neurodecoder public-esn `
-  --train data/sub-01_ses-01_eeg-epo.fif data/sub-01_ses-01_events.dat `
-  --train data/sub-01_ses-02_eeg-epo.fif data/sub-01_ses-02_events.dat `
-  --test data/sub-01_ses-03_eeg-epo.fif data/sub-01_ses-03_events.dat `
-  --trusted-legacy-events --output results/public-esn.csv
+foreach ($index in 1..10) {
+    $subject = 'sub-{0:00}' -f $index
+    neurodecoder public-esn `
+      --train "data/${subject}_ses-01_eeg-epo.fif" "data/${subject}_ses-01_events.dat" `
+      --train "data/${subject}_ses-02_eeg-epo.fif" "data/${subject}_ses-02_events.dat" `
+      --test "data/${subject}_ses-03_eeg-epo.fif" "data/${subject}_ses-03_events.dat" `
+      --compare --trusted-legacy-events --output "results/public-esn/${subject}.csv"
+    if ($LASTEXITCODE -ne 0) { throw "Evaluation failed for $subject" }
+}
 ```
 
 ## Other workflows
@@ -55,7 +60,7 @@ neurodecoder bel --recording data/inner_kkj_0226.mff --markers data/result01.csv
 To preprocess a raw BioSemi recording with embedded triggers into 256 Hz FIF epochs, place the BDF in `data/` and run the following command. Add `--iclabel` to enable ICA-based artifact removal.
 
 ```powershell
-neurodecoder preprocess --bdf data/sub-01_ses-01_task-innerspeech_eeg.bdf --output-dir results/epochs
+neurodecoder preprocess --bdf data/recording.bdf --output-dir results/epochs
 ```
 
 ## Source layout

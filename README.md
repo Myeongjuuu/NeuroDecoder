@@ -35,7 +35,7 @@ Add `--esn` to run a within-session replay. Use `--trusted-legacy-events` only w
 
 ### ESN evaluation across all participants
 
-The evaluation protocol trains a separate ESN for each participant. It selects the input representation and reservoir settings using sessions 01 and 02, then evaluates the fixed readout on session 03. Use `--compare` to run the standard ESN, filter-bank CSP + ESN, and direction-wise Fisher-selected CSP + ESN on the same split. Both CSP variants use the same reservoir. The number of selected components (8 or 16) is chosen within the training sessions. The loop writes one predictions CSV per participant.
+For each participant, train on sessions 01 and 02 and evaluate on session 03. By default, `public-esn` uses filter-bank power and tunes the ridge readout on the training sessions. Add `--standard-esn` for the fixed-penalty ESN, or `--compare` to evaluate both ESNs and both CSP variants on the same split.
 
 ```powershell
 foreach ($index in 1..10) {
@@ -48,8 +48,6 @@ foreach ($index in 1..10) {
     if ($LASTEXITCODE -ne 0) { throw "Evaluation failed for $subject" }
 }
 ```
-
-Add `--tuned-power` to use filter-bank power and choose the ridge readout penalty on the training sessions. Combine it with `--compare` to include both ESN variants in the same predictions CSV.
 
 ## Other workflows
 

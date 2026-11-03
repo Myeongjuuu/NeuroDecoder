@@ -215,10 +215,12 @@ def main(argv=None):
     parser.add_argument("--train", nargs=2, type=Path, action="append", required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--test", nargs=2, type=Path, required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--trusted-legacy-events", action="store_true")
-    parser.add_argument("--tuned-power", action="store_true",
-                        help="Use band power and select the ridge readout penalty on training sessions.")
+    model = parser.add_mutually_exclusive_group()
+    model.add_argument("--standard-esn", action="store_false", dest="tuned_power",
+                       help="Use the standard ESN with a fixed ridge readout penalty.")
+    model.add_argument("--tuned-power", action="store_true", dest="tuned_power", help=argparse.SUPPRESS)
     parser.add_argument("--compare", action="store_true",
-                        help="Save predictions from the existing ESN and both CSP variants.")
+                        help="Save predictions from both ESN variants and both CSP variants.")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if len(args.train) < 2:
@@ -266,8 +268,7 @@ def main(argv=None):
     predicted, score, name, config, penalty = decode(args.tuned_power)
     if args.compare:
         predictions = {"public-esn": decode(False)[0] if args.tuned_power else predicted}
-        if args.tuned_power:
-            predictions["tuned-power-esn"] = predicted
+        predictions["tuned-power-esn"] = predicted if args.tuned_power else decode(True)[0]
         predictions.update(compare_csp(combined, labels, groups, test))
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("w", newline="", encoding="utf-8") as stream:

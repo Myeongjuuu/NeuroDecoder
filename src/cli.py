@@ -6,8 +6,9 @@ import sys
 
 
 COMMANDS = {
+    "public-esn": ("models.tune_public_esn", "Tune an ESN on training sessions and evaluate a separate session."),
     "public-fisher": ("analysis.compute_public_fisher", "Run public Fisher analysis with optional ESN evaluation."),
-    "openbci": ("models.decode_openbci_words", "Decode marked OpenBCI CSV recordings with a sparse ridge ESN."),
+    "bel": ("models.decode_bel_words", "Decode marked BEL EGI recordings with a sparse ridge ESN."),
     "preprocess": ("data.preprocess_biosemi_bdf", "Convert BioSemi BDF recordings to EEG FIF epochs."),
 }
 

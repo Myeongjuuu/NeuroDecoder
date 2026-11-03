@@ -1,4 +1,4 @@
-"""Evaluate a sparse ridge ESN on paired word trials from OpenBCI recordings."""
+"""Evaluate a sparse ridge ESN on paired word trials from BEL recordings."""
 
 import argparse
 import csv
@@ -8,7 +8,7 @@ import numpy as np
 from scipy.signal import detrend, welch
 
 from neurodecoder.analysis.bandpass_filters import BANDS, filter_band
-from neurodecoder.data.read_openbci_csv import WORD_CODES, read_trials
+from neurodecoder.data.read_bel_recording import WORD_CODES, read_trials
 from neurodecoder.models.ridge_esn import RidgeESN
 
 
@@ -31,23 +31,32 @@ def feature_sequence(eeg, sfreq, method):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--csv", required=True, type=Path, help="Legacy rows-by-samples OpenBCI training CSV.")
-    parser.add_argument("--test-csv", type=Path, help="Separate recording for evaluation.")
-    parser.add_argument("--holdout-trials", type=int, default=10, help="Final trials held out when using one CSV.")
-    parser.add_argument("--sfreq", required=True, type=float, help="Recording sampling rate in Hz.")
+    parser.add_argument("--recording", required=True, type=Path, help="Training EGI .mff recording.")
+    parser.add_argument("--markers", required=True, type=Path, help="Sample-aligned marker CSV.")
+    parser.add_argument("--montage", required=True, type=Path, help="BEL130.sfp sensor coordinates.")
+    parser.add_argument("--test", nargs=2, type=Path, metavar=("MFF", "CSV"), help="Separate test recording and markers.")
+    parser.add_argument("--holdout-trials", type=int, default=10, help="Final trials held out with one recording.")
+    parser.add_argument("--initial-rest-seconds", type=float, default=60)
+    parser.add_argument("--marker-offset-samples", type=int, default=0, help="Recording sample corresponding to CSV row zero.")
     parser.add_argument("--features", choices=("filter-bank", "psd"), default="filter-bank")
     parser.add_argument("--units", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", required=True, type=Path, help="Prediction CSV path.")
     args = parser.parse_args(argv)
-    if args.units < 1 or not np.isfinite(args.sfreq) or args.sfreq <= 4:
-        parser.error("Use a positive reservoir size and a sampling rate above 4 Hz.")
-    if args.test_csv and args.test_csv.resolve() == args.csv.resolve():
+    if args.units < 1 or not np.isfinite(args.initial_rest_seconds) or args.initial_rest_seconds < 0:
+        parser.error("Use a positive reservoir size and a finite, nonnegative rest duration.")
+    if args.test and args.test[0].resolve() == args.recording.resolve():
         parser.error("Training and test recordings must be separate.")
 
-    train, train_labels = read_trials(args.csv)
-    if args.test_csv:
-        test, test_labels = read_trials(args.test_csv)
+    train, train_labels, sfreq, channels = read_trials(
+        args.recording, args.markers, args.montage, args.marker_offset_samples, args.initial_rest_seconds
+    )
+    if args.test:
+        test, test_labels, test_sfreq, test_channels = read_trials(
+            *args.test, args.montage, args.marker_offset_samples, args.initial_rest_seconds
+        )
+        if test_sfreq != sfreq or test_channels != channels:
+            parser.error("Training and test recordings must share the EEG channels and sampling rate.")
     else:
         holdout = args.holdout_trials
         if not 1 <= holdout < len(train):
@@ -65,7 +74,7 @@ def main(argv=None):
     span[span == 0] = 1
 
     def features(trial):
-        return feature_sequence((trial - lower) / span, args.sfreq, args.features)
+        return feature_sequence((trial - lower) / span, sfreq, args.features)
 
     train_sequences = [features(trial) for trial in train]
     esn = RidgeESN(train_sequences[0].shape[0], args.units, args.seed)

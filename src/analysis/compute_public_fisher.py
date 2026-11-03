@@ -9,35 +9,36 @@ import numpy as np
 from scipy.signal import sosfiltfilt
 
 from neurodecoder.analysis.bandpass_filters import BANDS, band_filter
-from neurodecoder.data.read_public_eeg_epochs import DIRECTIONS, SFREQ, load_session
+from neurodecoder.data.read_public_eeg_epochs import DIRECTIONS, SFREQ, load_rest_baseline, load_session
 from neurodecoder.models.online_readout_esn import EchoStateNetwork
 
 
-def normalize(action, relax, calibration):
-    """Fit one range per channel across both phases of calibration trials."""
-    lower = np.minimum(action[:calibration].min((0, 2)), relax[:calibration].min((0, 2)))
-    upper = np.maximum(action[:calibration].max((0, 2)), relax[:calibration].max((0, 2)))
+def normalize(action, baseline, calibration):
+    """Fit one range per channel using calibration action EEG and the resting baseline."""
+    lower = np.minimum(action[:calibration].min((0, 2)), baseline.min((0, 2)))
+    upper = np.maximum(action[:calibration].max((0, 2)), baseline.max((0, 2)))
     span = upper - lower
     span[span == 0] = 1
     return (action - lower[None, :, None]) / span[None, :, None], (
-        relax - lower[None, :, None]
+        baseline - lower[None, :, None]
     ) / span[None, :, None]
 
 
-def fisher_maps(action, relax, labels):
-    """Compare action band power against same-direction relaxation band power."""
+def fisher_maps(action, baseline, labels):
+    """Compare action band power against the shared resting baseline."""
     scores = np.empty((len(DIRECTIONS), action.shape[1], len(BANDS)))
     if np.any(np.bincount(labels, minlength=len(DIRECTIONS)) < 2):
         raise ValueError("Fisher analysis requires at least two trials per direction.")
     for band_index, band in enumerate(BANDS):
         sos = band_filter(band, SFREQ)
         action_power = (sosfiltfilt(sos, action) ** 2).mean(axis=-1)
-        relax_power = (sosfiltfilt(sos, relax) ** 2).mean(axis=-1)
+        baseline_power = (sosfiltfilt(sos, baseline) ** 2).mean(axis=-1)
+        baseline_mean = baseline_power.mean(axis=0)
+        baseline_variance = baseline_power.var(axis=0)
         for label in range(len(DIRECTIONS)):
             task = action_power[labels == label]
-            rest = relax_power[labels == label]
-            variance = task.var(axis=0) + rest.var(axis=0)
-            gap = (task.mean(axis=0) - rest.mean(axis=0)) ** 2
+            variance = task.var(axis=0) + baseline_variance
+            gap = (task.mean(axis=0) - baseline_mean) ** 2
             scores[label, :, band_index] = gap / np.maximum(variance, 1e-12)
     return scores
 
@@ -95,6 +96,7 @@ def main(argv=None):
     parser.add_argument("--events", required=True, type=Path, help="Headerless numeric CSV or official legacy DAT")
     parser.add_argument("--trusted-legacy-events", action="store_true",
                         help="Allow pickle loading for the trusted original OpenNeuro DAT")
+    parser.add_argument("--baseline", required=True, type=Path, help="Resting baseline FIF from the same session")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--esn", action="store_true", help="Also run chronological ESN replay")
     parser.add_argument("--calibration-trials", type=int, help="Initial trial count for ESN evaluation; defaults to half")
@@ -105,17 +107,19 @@ def main(argv=None):
         parser.error("--top-k must be positive.")
     if args.calibration_trials is not None and not args.esn:
         parser.error("--calibration-trials requires --esn.")
-    action, relax, labels, channels = load_session(args.epochs, args.events, args.trusted_legacy_events)
+    action, labels, channels = load_session(args.epochs, args.events, args.trusted_legacy_events)
+    baseline = load_rest_baseline(args.baseline, channels, action.shape[-1])
     calibration = len(labels)
     if args.esn:
         calibration = args.calibration_trials if args.calibration_trials is not None else len(labels) // 2
         if not 1 <= calibration < len(labels):
             parser.error("Calibration must leave at least one trial for scoring.")
-    action, relax = normalize(action, relax, calibration)
-    scores = fisher_maps(action[:calibration], relax[:calibration], labels[:calibration])
+    action, baseline = normalize(action, baseline, calibration)
+    scores = fisher_maps(action[:calibration], baseline, labels[:calibration])
     args.output.mkdir(parents=True, exist_ok=True)
     save_fisher(args.output, scores, channels)
     print(f"Fisher maps: {calibration} of {len(labels)} inner-speech trials, {len(channels)} EEG channels")
+    print(f"Rest reference: {len(baseline)} windows of {baseline.shape[-1] / SFREQ:g} s from one recording")
     if args.esn:
         evaluate_esn(args.output, action, labels, scores, channels, calibration, args.top_k, args.seed)
 

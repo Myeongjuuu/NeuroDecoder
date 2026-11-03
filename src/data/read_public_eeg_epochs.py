@@ -9,10 +9,9 @@ DIRECTIONS = ("up", "down", "right", "left")
 SFREQ = 256
 # Times are relative to the cue marker in the official FIF.
 ACTION = (0.5, 3.0)
-RELAX = (3.0, 4.0)
 
 
-def load_session(eeg_path, events_path, trusted_legacy_events, *, include_relax=True):
+def load_session(eeg_path, events_path, trusted_legacy_events):
     """Join official event metadata to epochs by recording sample."""
     if trusted_legacy_events:
         events = np.load(events_path, allow_pickle=True)
@@ -49,13 +48,23 @@ def load_session(eeg_path, events_path, trusted_legacy_events, *, include_relax=
         raise ValueError("No EEG channels found.")
     if not np.isclose(epochs.info["sfreq"], SFREQ) or not np.isclose(epochs.tmin, -0.5):
         raise ValueError("Expected official cue-aligned epochs at 256 Hz starting at -0.5 s.")
-    end = RELAX[1] if include_relax else ACTION[1]
-    if epochs.times[-1] < end - 1 / SFREQ:
-        raise ValueError("Epochs do not cover the requested analysis windows.")
+    start, stop = (round((edge - epochs.tmin) * SFREQ) for edge in ACTION)
+    if stop > len(epochs.times):
+        raise ValueError("Epochs do not cover the action window.")
+    action = epochs.get_data(picks=channels)[..., start:stop]
+    return detrend(action), np.asarray(labels), channels
 
-    def window(bounds):
-        start, stop = (round((edge - epochs.tmin) * SFREQ) for edge in bounds)
-        return detrend(epochs.get_data(picks=channels, tmin=epochs.times[start], tmax=epochs.times[stop - 1]))
 
-    relax = window(RELAX) if include_relax else None
-    return window(ACTION), relax, np.asarray(labels), channels
+def load_rest_baseline(path, channels, window_samples):
+    """Split one resting recording into nonoverlapping action-length windows."""
+    epochs = mne.read_epochs(path, preload=False, verbose="error")
+    if len(epochs) != 1 or not np.isclose(epochs.info["sfreq"], SFREQ):
+        raise ValueError("Expected one resting baseline epoch recorded at 256 Hz.")
+    if not set(channels).issubset(epochs.ch_names):
+        raise ValueError("Baseline is missing channels present in the task EEG.")
+    signal = epochs.get_data(picks=channels)[0]
+    count = signal.shape[-1] // window_samples
+    if count < 2:
+        raise ValueError("Baseline must contain at least two full action-length windows.")
+    windows = signal[:, :count * window_samples].reshape(len(channels), count, window_samples)
+    return detrend(windows.transpose(1, 0, 2))

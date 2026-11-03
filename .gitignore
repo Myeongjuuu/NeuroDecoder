@@ -1,6 +1,7 @@
 /data/
 /results/
 *.bdf
+*.mff/
 *.fif
 *.dat
 __pycache__/

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "matplotlib>=3.8",
     "mne>=1.7",
+    "mffpy>=0.11",
     "numpy>=1.26",
     "scipy>=1.11",
 ]

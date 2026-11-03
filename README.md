@@ -49,6 +49,8 @@ foreach ($index in 1..10) {
 }
 ```
 
+Add `--tuned-power` to use filter-bank power and choose the ridge readout penalty on the training sessions. Combine it with `--compare` to include both ESN variants in the same predictions CSV.
+
 ## Other workflows
 
 For BEL recordings, place the MFF directory and its marker CSV in `data/`. The CSV requires a sample-aligned `Data` column with paired word codes 2–11. The sampling rate is read from the recording. Use `--marker-offset-samples` if CSV row zero maps to a later recording sample.

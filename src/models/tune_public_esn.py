@@ -82,9 +82,9 @@ def reservoir_states(data, config):
     return accumulated / data.shape[1]
 
 
-def fit_readout(states, labels):
+def fit_readout(states, labels, penalty=0.1):
     states = np.column_stack((np.ones(len(states)), states))
-    gram = states.T @ states + 0.1 * np.eye(states.shape[1])
+    gram = states.T @ states + penalty * np.eye(states.shape[1])
     return solve(gram, states.T @ np.eye(len(DIRECTIONS))[labels], assume_a="pos")
 
 
@@ -114,6 +114,20 @@ def select_settings(features, labels, groups):
             if best is None or score > best[0]:
                 best = (score, name, config)
     return best
+
+
+def select_readout_penalty(features, labels, groups, config):
+    penalties = (0.1, 0.01, 1.0, 10.0)
+    scores = np.zeros(len(penalties))
+    for session in np.unique(groups):
+        fit = groups != session
+        projection = fit_projection(features[fit])
+        states = reservoir_states(project(features, projection), config)
+        for index, penalty in enumerate(penalties):
+            readout = fit_readout(states[fit], labels[fit], penalty)
+            guesses = predict(states[~fit], readout)
+            scores[index] += balanced_accuracy(labels[~fit], guesses)
+    return penalties[int(scores.argmax())]
 
 
 def windows(signal):
@@ -201,6 +215,8 @@ def main(argv=None):
     parser.add_argument("--train", nargs=2, type=Path, action="append", required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--test", nargs=2, type=Path, required=True, metavar=("FIF", "EVENTS"))
     parser.add_argument("--trusted-legacy-events", action="store_true")
+    parser.add_argument("--tuned-power", action="store_true",
+                        help="Use band power and select the ridge readout penalty on training sessions.")
     parser.add_argument("--compare", action="store_true",
                         help="Save predictions from the existing ESN and both CSP variants.")
     parser.add_argument("--output", type=Path, required=True)
@@ -232,16 +248,27 @@ def main(argv=None):
 
     combined = np.concatenate(actions)
     labels = np.concatenate(targets)
-    training = {name: sequences(combined, name) for name in ("band-power", "spatial-covariance")}
     groups = np.asarray(groups)
-    score, name, config = select_settings(training, labels, groups)
-    projection = fit_projection(training[name])
-    states = reservoir_states(project(training[name], projection), config)
-    readout = fit_readout(states, labels)
     test, true, _ = read(args.test)
-    predicted = predict(reservoir_states(project(sequences(test, name), projection), config), readout)
+
+    def decode(tuned_power):
+        candidates = ("band-power",) if tuned_power else ("band-power", "spatial-covariance")
+        training = {name: sequences(combined, name) for name in candidates}
+        score, name, config = select_settings(training, labels, groups)
+        features = training[name]
+        projection = fit_projection(features)
+        states = reservoir_states(project(features, projection), config)
+        penalty = select_readout_penalty(features, labels, groups, config) if tuned_power else 0.1
+        readout = fit_readout(states, labels, penalty)
+        test_states = reservoir_states(project(sequences(test, name), projection), config)
+        return predict(test_states, readout), score, name, config, penalty
+
+    predicted, score, name, config, penalty = decode(args.tuned_power)
     if args.compare:
-        predictions = {"public-esn": predicted, **compare_csp(combined, labels, groups, test)}
+        predictions = {"public-esn": decode(False)[0] if args.tuned_power else predicted}
+        if args.tuned_power:
+            predictions["tuned-power-esn"] = predicted
+        predictions.update(compare_csp(combined, labels, groups, test))
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.writer(stream)
@@ -259,5 +286,7 @@ def main(argv=None):
         writer.writerows((index, DIRECTIONS[actual], DIRECTIONS[guess])
                          for index, (actual, guess) in enumerate(zip(true, predicted), 1))
     print(f"Selected {name}, reservoir (units, leak, radius) {config}; session CV {score:.3f}")
+    if args.tuned_power:
+        print(f"Selected ridge readout penalty: {penalty:g}")
     print(f"Held-out accuracy: {np.sum(true == predicted)}/{len(true)} ({np.mean(true == predicted):.1%})")
     print(f"Held-out balanced accuracy: {balanced_accuracy(true, predicted):.1%}")

@@ -1,21 +1,4 @@
-# Normalize the new implementation without rewriting historical notebook bytes.
-/src/** text eol=lf
-/tests/** text eol=lf
-/notebooks/** text eol=lf
-/configs/** text eol=lf
-/docs/** text eol=lf
-/.github/** text eol=lf
-/README.md text eol=lf
-/.gitignore text eol=lf
-/.gitattributes text eol=lf
-/pyproject.toml text eol=lf
-/requirements*.txt text eol=lf
-/data/README.md text eol=lf
-/experiments/README.md text eol=lf
-
-"EEG Inner Speech Decoding/**" -text
-"Imagined Speech Decoding using Functional Connectivity/**" -text
-/SOURCE_MANIFEST.json -text
-
-/scripts/** text eol=lf
-/.githooks/** text eol=lf
+* text=auto
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf

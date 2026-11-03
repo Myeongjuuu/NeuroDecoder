@@ -1,42 +1,34 @@
 # NeuroDecoder
 
-EEG-based imagined speech decoding for alternative communication in individuals with aphasia.
+Python tools for imagined-speech EEG. The OpenBCI workflow uses an ESN to decode ten word cues from marked recordings. The public EEG workflow analyzes directional Fisher ratios and can replay a four-direction ESN.
 
-## Overview
+## Run
 
-This project investigates whether EEG signals recorded during imagined speech — words mentally rehearsed but never spoken — can be decoded to identify the intended word. The goal is to enable alternative communication for individuals who cannot speak due to conditions such as aphasia.
+The pinned environment was checked with Python 3.11.9. Place recordings in `data/`.
 
-We recruited 40 healthy participants, collected 16-channel EEG in a shielded soundproof booth using an OpenBCI Cyton system, and built a complete decoding pipeline: frequency-domain feature extraction with a filter bank and CSP, followed by classification with an Echo State Network (ESN).
+```powershell
+conda create -n neurodecoder python=3.11.9 -y
+conda activate neurodecoder
+python -m pip install -r requirements.txt
+neurodecoder --help
 
-The public inner-speech EEG dataset (Nieto et al., 2022) was also incorporated to validate the pipeline on higher-density recordings.
-
-## Method
-
-1. **Experiment design** — 40 healthy adults (aged 20–30); 10 imagined-speech target words (8 device-control + 2 condition words); recorded in a shielded soundproof booth with a 16-ch OpenBCI Cyton system
-2. **Data** — self-collected dataset (40 subjects, 10 words) + [Nieto et al. (2022)](https://doi.org/10.1038/s41597-022-01147-2) public inner-speech EEG dataset
-3. **Preprocessing** — MNE-Python: detrending (baseline drift removal) → min-max normalization per channel
-4. **Feature extraction** — filter bank decomposition (0–60 Hz, 30 bands at 2 Hz intervals); Fisher Ratio per band per channel to identify discriminative frequency–channel pairs; Common Spatial Pattern (CSP) spatial filtering
-5. **Decoding** — Echo State Network (ESN) with reservoir-based recurrent structure, online learning, winner-take-all readout over 10 word classes
-
-## Repository Contents
-
-```
-EEG Inner Speech Decoding/     # Original analysis notebooks
-  preprocessing_*.ipynb        # EEG preprocessing pipelines
-  filter_bank.ipynb            # Filter bank + Fisher Ratio feature extraction
-  filter_bank_csp.ipynb        # Filter bank + CSP + SVM classification
-  psd.ipynb                    # Power spectral density analysis
-  psd_comparison.ipynb         # PSD comparison across classes
-  CSP.ipynb                    # CSP classification
-  Wavelet_Transform.ipynb      # Wavelet-based analysis
-  check_env.py                 # Dependency check script
-SOURCE_MANIFEST.json           # SHA-256 of original source files
+neurodecoder openbci --csv data/result_06.csv --sfreq 125 --output results/openbci.csv
+neurodecoder preprocess --bdf data/sub-01_ses-01_task-innerspeech_eeg.bdf --output-dir results/epochs
+neurodecoder public-fisher --epochs data/sub-01_ses-01_eeg-epo.fif --events data/sub-01_ses-01_events.dat --trusted-legacy-events --output results/fisher
 ```
 
-## Stack
+Use the recording's actual sampling rate for OpenBCI. For `public-fisher`, use the matching official FIF and DAT from [OpenNeuro ds003626](https://openneuro.org/datasets/ds003626). The legacy DAT requires a trusted source. Add `--esn` to replay the ESN. Run any command with `--help` for its options. The pinned setup includes the dependencies for `preprocess --iclabel`. For a base install, use `python -m pip install -e .`.
 
-Python · MNE-Python · NumPy · SciPy · scikit-learn · Matplotlib
+## Code (src/)
 
-## Reference
-
-N. Nieto et al., "Thinking out loud, an open-access EEG-based BCI dataset for inner speech recognition," *Scientific Data*, 2022. [https://doi.org/10.1038/s41597-022-01147-2](https://doi.org/10.1038/s41597-022-01147-2)
+| Location | Role |
+| --- | --- |
+| `cli.py` | Command entry point |
+| `data/read_openbci_csv.py` | Read CSV word markers and extract trials |
+| `data/preprocess_biosemi_bdf.py` | Filter, resample, and epoch BDF into FIF |
+| `data/read_public_eeg_epochs.py` | Match public FIF and events, then extract inner-speech windows |
+| `analysis/bandpass_filters.py` | Shared filter-bank definitions and filtering |
+| `analysis/compute_public_fisher.py` | Compare action and relaxation EEG by direction |
+| `models/decode_openbci_words.py` | Prepare features and run the ten-word decoder |
+| `models/ridge_esn.py` | Sparse reservoir with ridge readout |
+| `models/online_readout_esn.py` | Reservoir with a readout that updates after each labeled trial |
